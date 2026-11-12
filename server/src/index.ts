@@ -56,14 +56,31 @@ const wss = new WebSocketServer({ server, path: '/ws/speech' });
 
 setupSpeechProxy(wss);
 
-// Start Telegram Bot
+// Start Telegram Bot with 409 Conflict retry (safe for Coolify zero-downtime rolling deploys)
+let isShuttingDown = false;
+let botRetryTimer: NodeJS.Timeout | null = null;
 const bot = setupTelegramBot();
+
+function startBotWithRetry() {
+  if (!bot || isShuttingDown) return;
+  bot
+    .start({
+      onStart: (botInfo) => {
+        console.log(`[Bot] Started @${botInfo.username}`);
+      },
+    })
+    .catch((err: any) => {
+      if (isShuttingDown) return;
+      const isConflict = err?.error_code === 409 || String(err?.message || '').includes('409');
+      console.warn(
+        `[Bot] Polling stopped (${isConflict ? '409 Conflict — another instance is running' : err?.message || err}). Retrying in 5s...`
+      );
+      botRetryTimer = setTimeout(startBotWithRetry, 5000);
+    });
+}
+
 if (bot) {
-  bot.start({
-    onStart: (botInfo) => {
-      console.log(`[Bot] Started @${botInfo.username}`);
-    },
-  });
+  startBotWithRetry();
 }
 
 server.listen(PORT, () => {
@@ -74,6 +91,11 @@ server.listen(PORT, () => {
 // Graceful shutdown on SIGTERM / SIGINT (Coolify restart / redeploy)
 const handleShutdown = (signal: string) => {
   console.log(`[Server] Received ${signal}. Initiating graceful shutdown...`);
+  isShuttingDown = true;
+  if (botRetryTimer) {
+    clearTimeout(botRetryTimer);
+    botRetryTimer = null;
+  }
   if (bot) {
     try {
       bot.stop();
