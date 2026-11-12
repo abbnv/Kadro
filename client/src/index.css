@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Pobeda';
+  src: url('./assets/fonts/pobeda-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  /* 
+   * Hardware Safe Area:
+   * We use max() between Telegram's --tg-safe-area-inset-top and native env(safe-area-inset-top).
+   * This is critical because telegram-web-app.js initializes --tg-safe-area-inset-top to 0px,
+   * which would otherwise suppress the fallback in var(--tg-..., env(...)).
+   */
+  --safe-hw-top: max(var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+  --safe-content-top: var(--tg-content-safe-area-inset-top, 0px);
+  --safe-area-top: calc(var(--safe-hw-top) + var(--safe-content-top));
+
+  --safe-hw-bottom: max(var(--tg-safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+  --safe-content-bottom: var(--tg-content-safe-area-inset-bottom, 0px);
+  --safe-area-bottom: calc(var(--safe-hw-bottom) + var(--safe-content-bottom));
+
+  /* Apple HIG Curves */
+  --ease-apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-apple-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-apple-press: cubic-bezier(0.2, 0, 0, 1);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  color: #ededed;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+/* Safe area padding helper classes */
+.pt-safe-top {
+  padding-top: max(3.75rem, calc(var(--safe-area-top) + 0.75rem));
+}
+
+.top-safe-pill {
+  top: max(3.5rem, calc(var(--safe-area-top) + 0.5rem));
+}
+
+.bottom-safe-nav {
+  bottom: max(2.5rem, calc(var(--safe-area-bottom) + 1.25rem));
+}
+
+/* Tactile Apple Press Behavior: Immediate response on pointer-down */
+.apple-press {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), opacity 120ms ease;
+  will-change: transform;
+}
+.apple-press:active {
+  transform: scale(0.92);
+}
+
+.apple-press-subtle {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+.apple-press-subtle:active {
+  transform: scale(0.96);
+}
+
+/* Apple HIG Sheet and Nav Animations */
+@keyframes appleSheetUp {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-sheet-up {
+  animation: appleSheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes appleNavEnter {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.93) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-nav-enter {
+  animation: appleNavEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Animation for collapse button gliding from center nav to the right edge */
+@keyframes slideInFromNavToRight {
+  0% {
+    opacity: 0.3;
+    transform: translateX(-40px) scale(0.88);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-to-right {
+  animation: slideInFromNavToRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Play halo pulse animation */
+@keyframes haloBreathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.65;
+  }
+}
+
+.animate-halo-pulse {
+  animation: haloBreathe 2.4s ease-in-out infinite;
+}
+
+/* Hide scrollbars during prompter mode and carousels */
+.hide-scrollbar::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
+}
+
+/* Mirror modes for prompter glass reflection */
+/* Portrait: Horizontal flip (scaleX) */
+.prompter-mirrored-x {
+  transform: scaleX(-1);
+  transform-origin: center center;
+}
+
+/* Landscape: Vertical word flip (scaleY, keeps reading flow from start to end) */
+.prompter-mirrored-word-y {
+  display: inline-block;
+  transform: scaleY(-1);
+  transform-origin: center center;
+}
+
+/* Custom Apple HIG Range Slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  height: 5px;
+  border-radius: 9999px;
+  outline: none;
+  transition: background 150ms ease;
+}
+
+input[type="range"]:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 120ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 120ms ease;
+}
+
+input[type="range"]::-moz-range-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-to-right,
+  .animate-sheet-up,
+  .animate-nav-enter,
+  .animate-halo-pulse {
+    animation: none !important;
+    transition: opacity 150ms ease !important;
+  }
+}
