@@ -15,12 +15,20 @@ export function getBotInstance(): Bot | null {
 
 export async function syncBotMenuButton(text?: string): Promise<void> {
   if (!botInstance) return;
-  const tmaUrl = process.env.TMA_URL || 'http://localhost:5173';
-  if (!tmaUrl.startsWith('https://')) return;
-  const menuText =
-    (text ?? process.env.BOT_MENU_BUTTON_TEXT ?? defaultMenuButtonText).trim() ||
-    defaultMenuButtonText;
+  const isWebAppMenuEnabled = process.env.BOT_MENU_BUTTON_ENABLED === 'true';
   try {
+    if (!isWebAppMenuEnabled) {
+      await botInstance.api.setChatMenuButton({
+        menu_button: { type: 'commands' },
+      });
+      return;
+    }
+
+    const tmaUrl = process.env.TMA_URL || 'http://localhost:5173';
+    if (!tmaUrl.startsWith('https://')) return;
+    const menuText =
+      (text ?? process.env.BOT_MENU_BUTTON_TEXT ?? defaultMenuButtonText).trim() ||
+      defaultMenuButtonText;
     await botInstance.api.setChatMenuButton({
       menu_button: {
         type: 'web_app',
