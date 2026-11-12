@@ -22,8 +22,8 @@ COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY client/package.json ./client/
 
-# Install all dependencies (workspaces root + client + server)
-RUN npm ci
+# Install all dependencies including devDependencies (needed for tsc & vite build even when Coolify sets NODE_ENV=production)
+RUN NODE_ENV=development npm ci --include=dev
 
 # Copy application source code and configs
 COPY server/ ./server/
