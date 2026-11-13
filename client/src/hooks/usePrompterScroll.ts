@@ -78,6 +78,16 @@ interface UsePrompterScrollOptions {
   onReachEnd?: () => void;
 }
 
+function getOffsetTopInContainer(el: HTMLElement, container: HTMLElement): number {
+  let top = 0;
+  let curr: HTMLElement | null = el;
+  while (curr && curr !== container) {
+    top += curr.offsetTop;
+    curr = curr.offsetParent as HTMLElement | null;
+  }
+  return top;
+}
+
 export function usePrompterScroll({
   text,
   speed,
@@ -107,7 +117,8 @@ export function usePrompterScroll({
   const isUserInteractingRef = useRef<boolean>(false);
   const wordOffsetsRef = useRef<number[]>([]);
 
-  // Precompute word vertical offsets once to eliminate layout thrashing during animation/scrolling
+  // Precompute word vertical offsets once to eliminate layout thrashing during animation/scrolling.
+  // Uses offsetTop instead of getBoundingClientRect() so CSS transforms (scaleY(-1), rotate(90deg)) never invert coordinates.
   const recomputeWordOffsets = useCallback(() => {
     const container = containerRef.current;
     if (!container || tokens.length === 0) return;
@@ -115,30 +126,35 @@ export function usePrompterScroll({
     const wordElements = container.querySelectorAll<HTMLElement>('[data-word-index]');
     if (wordElements.length === 0) return;
 
-    const containerTop = container.getBoundingClientRect().top;
-    const currentScroll = container.scrollTop;
     const offsets = new Array<number>(wordElements.length);
-
     for (let i = 0; i < wordElements.length; i++) {
-      const el = wordElements[i];
-      // Invariant distance from the top of the scrollable document to the word
-      offsets[i] = el.getBoundingClientRect().top - containerTop + currentScroll;
+      offsets[i] = getOffsetTopInContainer(wordElements[i], container);
     }
 
     wordOffsetsRef.current = offsets;
   }, [containerRef, tokens.length]);
 
-  // Recompute offsets on mount, text/font/padding change, and window resize
+  // Recompute offsets on mount, text/font/padding change, container resize, and window resize
   useEffect(() => {
     const timer = setTimeout(recomputeWordOffsets, 60);
     window.addEventListener('resize', recomputeWordOffsets);
     window.addEventListener('orientationchange', recomputeWordOffsets);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        recomputeWordOffsets();
+      });
+      resizeObserver.observe(containerRef.current);
+    }
+
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', recomputeWordOffsets);
       window.removeEventListener('orientationchange', recomputeWordOffsets);
+      resizeObserver?.disconnect();
     };
-  }, [recomputeWordOffsets, fontSize, paddingX]);
+  }, [recomputeWordOffsets, containerRef, fontSize, paddingX]);
 
   // Synchronize active word index using binary search over precomputed offsets (O(log N), zero DOM queries)
   const updateActiveWordFromScroll = useCallback(
@@ -342,9 +358,7 @@ export function usePrompterScroll({
       } else {
         const wordEl = container.querySelector(`[data-word-index="${index}"]`) as HTMLElement;
         if (!wordEl) return;
-        const containerRect = container.getBoundingClientRect();
-        const wordRect = wordEl.getBoundingClientRect();
-        wordTop = container.scrollTop + (wordRect.top - containerRect.top);
+        wordTop = getOffsetTopInContainer(wordEl, container);
       }
 
       const newTarget = Math.max(0, wordTop - focalOffset);

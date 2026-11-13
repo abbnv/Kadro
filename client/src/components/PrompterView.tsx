@@ -518,7 +518,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Main Text Scroll Area */}
           <div
             ref={containerRef}
-            className={`flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar ${mirrorViewportClass}`}
+            className={`relative flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar ${mirrorViewportClass}`}
           >
             <div className={`w-full min-h-full transition-transform duration-200 ${mirrorContainerClass}`}>
               <div style={{ height: 'max(20vh, calc(var(--safe-area-top) + 12vh))' }} />
@@ -582,7 +582,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
 
             <div
               ref={containerRef}
-              className="w-full h-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
+              className="relative w-full h-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
               style={{
                 maskImage:
                   'linear-gradient(to bottom, transparent 0%, black 14%, black 75%, transparent 100%)',
@@ -636,7 +636,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
 
             <div
               ref={containerRef}
-              className="w-full h-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
+              className="relative w-full h-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
               style={{
                 maskImage:
                   'linear-gradient(to bottom, transparent 0%, black 15%, black 76%, transparent 100%)',
