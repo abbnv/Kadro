@@ -399,11 +399,11 @@ export function usePrompterScroll({
       if (cleanSpoken.length === 0) return;
 
       // -----------------------------------------------------------------------
-      // 1. PRIMARY FORWARD READING HORIZON (curr to curr + 12)
-      // The speaker is reading forward. Prioritize finding the furthest matching
-      // token in the forward window to eliminate speech lag and ensure snappy tracking.
+      // 1. PRIMARY FORWARD READING HORIZON (curr to curr + 8)
+      // The speaker is reading forward. Require multi-word confirmation for
+      // jumps beyond +2 words so common 4-6 letter words never skip ahead.
       // -----------------------------------------------------------------------
-      const forwardMax = Math.min(tokens.length - 1, curr + 12);
+      const forwardMax = Math.min(tokens.length - 1, curr + 8);
       let bestForwardIdx = -1;
 
       // Check from the latest spoken words towards the earliest
@@ -413,13 +413,8 @@ export function usePrompterScroll({
 
         for (let tIdx = curr; tIdx <= forwardMax; tIdx++) {
           if (wordsMatch(tokens[tIdx].normalized, spoken)) {
-            // Check reliability of the forward match:
-            // - Immediate next words (tIdx <= curr + 1) are always valid.
-            // - For words further ahead (tIdx > curr + 1), require either:
-            //     a) A word with length >= 4 (not an isolated preposition), OR
-            //     b) A 2-word sequence match with adjacent spoken/token word.
-            const isImmediate = tIdx <= curr + 1;
-            const isDistinctive = tokens[tIdx].normalized.length >= 4;
+            const isImmediate = tIdx <= curr + 2;
+            const isVeryDistinctive = tIdx <= curr + 5 && tokens[tIdx].normalized.length >= 7;
             const hasPrevMatch =
               sIdx > 0 &&
               tIdx > 0 &&
@@ -429,7 +424,7 @@ export function usePrompterScroll({
               tIdx + 1 < tokens.length &&
               wordsMatch(tokens[tIdx + 1].normalized, cleanSpoken[sIdx + 1]);
 
-            if (isImmediate || isDistinctive || hasPrevMatch || hasNextMatch) {
+            if (isImmediate || isVeryDistinctive || hasPrevMatch || hasNextMatch) {
               const matchedIdx = hasNextMatch ? tIdx + 1 : tIdx;
               if (matchedIdx > bestForwardIdx) {
                 bestForwardIdx = matchedIdx;
