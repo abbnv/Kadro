@@ -158,8 +158,8 @@ export function usePrompterScroll({
         return;
       }
 
-      // Focal horizon: 30% from the top of the viewport
-      const focalY = scrollTop + container.clientHeight * 0.3;
+      // Focal horizon: 20% from the top of the viewport (leaves 80% below for look-ahead)
+      const focalY = scrollTop + container.clientHeight * 0.2;
 
       let low = 0;
       let high = offsets.length - 1;
@@ -301,7 +301,7 @@ export function usePrompterScroll({
           const diff = targetScrollTopRef.current - currentScrollTopRef.current;
 
           if (Math.abs(diff) > 0.4) {
-            const step = diff * Math.min(1, dt * 10.0);
+            const step = diff * Math.min(1, dt * 14.0);
             currentScrollTopRef.current += step;
             container.scrollTop = currentScrollTopRef.current;
           }
@@ -334,7 +334,7 @@ export function usePrompterScroll({
       if (!container) return;
 
       const offsets = wordOffsetsRef.current;
-      const focalOffset = container.clientHeight * 0.3;
+      const focalOffset = container.clientHeight * 0.2;
 
       let wordTop: number;
       if (offsets && offsets[index] !== undefined) {

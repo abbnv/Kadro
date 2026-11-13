@@ -500,10 +500,10 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Top Soft Vignette for seamless fade-in */}
           <div className="pointer-events-none fixed top-0 left-0 right-0 h-28 bg-gradient-to-b from-black via-black/80 to-transparent z-20" />
 
-          {/* Apple HIG Eye Contact Horizon Line (30% optical reading level) */}
+          {/* Apple HIG Eye Contact Horizon Line (20% optical reading level) */}
           <div
             className="pointer-events-none fixed left-0 right-0 z-20 flex items-center justify-between px-6 transition-opacity duration-300"
-            style={isMirroredLandscape ? { bottom: '30%' } : { top: '30%' }}
+            style={isMirroredLandscape ? { bottom: '20%' } : { top: '20%' }}
           >
             <div className="flex items-center gap-1.5 opacity-30">
               <div className="w-5 h-[1.5px] bg-gradient-to-r from-transparent to-white rounded-full" />
@@ -521,7 +521,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             className={`flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar ${mirrorViewportClass}`}
           >
             <div className={`w-full min-h-full transition-transform duration-200 ${mirrorContainerClass}`}>
-              <div style={{ height: 'max(30vh, calc(var(--safe-area-top) + 20vh))' }} />
+              <div style={{ height: 'max(20vh, calc(var(--safe-area-top) + 12vh))' }} />
 
               <div
                 className="w-full mx-auto py-4 font-normal tracking-wide box-border"
