@@ -5,6 +5,7 @@ import { CameraReviewModal } from './CameraReviewModal';
 import { usePrompterScroll } from '../hooks/usePrompterScroll';
 import { useSpeechRecognition, SpeechTranscriptEvent } from '../hooks/useSpeechRecognition';
 import { useCameraRecorder } from '../hooks/useCameraRecorder';
+import { useWakeLock } from '../hooks/useWakeLock';
 import { haptic } from '../utils/haptics';
 import {
   AlertCircle,
@@ -101,10 +102,15 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const [isLandscape, setIsLandscape] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false
   );
+  const [forceLandscape, setForceLandscape] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useWakeLock(true);
 
   const cameraMode: CameraMode = script.settings.cameraMode || 'text';
   const isCameraActive = cameraMode === 'reels' || cameraMode === 'circle';
+  const effectiveIsLandscape = isLandscape || (forceLandscape && !isCameraActive);
+  const isMirroredLandscape = !isCameraActive && script.settings.isMirrored && effectiveIsLandscape;
   const ringLight = Boolean(script.settings.ringLight);
   const overlayOpacity = script.settings.cameraOverlayOpacity ?? 50;
   const countdownSeconds = script.settings.countdownSeconds ?? 3;
@@ -132,11 +138,15 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     };
   }, []);
 
-  // Portrait mode: horizontal flip on container (scaleX) — only in classic text mode
+  // Portrait mode: horizontal flip on inner wrapper (scaleX); Landscape mode: vertical flip on scroll viewport (scaleY)
   const mirrorContainerClass = useMemo(() => {
     if (isCameraActive || !script.settings.isMirrored) return '';
-    return !isLandscape ? 'prompter-mirrored-x' : '';
-  }, [isCameraActive, script.settings.isMirrored, isLandscape]);
+    return !effectiveIsLandscape ? 'prompter-mirrored-x' : '';
+  }, [isCameraActive, script.settings.isMirrored, effectiveIsLandscape]);
+
+  const mirrorViewportClass = useMemo(() => {
+    return isMirroredLandscape ? 'prompter-mirrored-y' : '';
+  }, [isMirroredLandscape]);
 
   // Ref for pauseRecording so handleReachEnd can call it without circular dependency
   const pauseRecordingRef = useRef<() => void>(() => {});
@@ -322,17 +332,32 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   // Request fullscreen & unlock orientation by default on enter
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (!tg) return;
-    try {
-      if (typeof tg.requestFullscreen === 'function') {
-        tg.requestFullscreen();
+    const unlock = () => {
+      try {
+        if (tg && typeof tg.unlockOrientation === 'function') {
+          tg.unlockOrientation();
+        }
+        screen.orientation?.unlock?.();
+      } catch {
+        // ignore
       }
-      if (typeof tg.unlockOrientation === 'function') {
-        tg.unlockOrientation();
+    };
+
+    try {
+      if (tg && typeof tg.requestFullscreen === 'function') {
+        tg.requestFullscreen();
       }
     } catch {
       // ignore
     }
+
+    unlock();
+    const t1 = setTimeout(unlock, 150);
+    const t2 = setTimeout(unlock, 500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []);
 
   const handleExit = useCallback(() => {
@@ -403,7 +428,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const renderScriptTokens = () =>
     tokens.map((token) => {
       const isSpoken = script.settings.mode === 'speech' && token.index < activeWordIndex;
-      const isWordFlippedY = !isCameraActive && script.settings.isMirrored && isLandscape;
 
       return (
         <React.Fragment key={token.index}>
@@ -411,8 +435,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             data-word-index={token.index}
             onPointerDown={() => haptic.selection()}
             className={`inline-block mr-[0.25em] align-middle cursor-pointer transition-colors duration-150 ${
-              isWordFlippedY ? 'prompter-mirrored-word-y' : ''
-            } ${
               isSpoken ? 'text-neutral-400/45' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]'
             }`}
             onClick={(e) => {
@@ -439,13 +461,29 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const circleProgressRatio = Math.min(1, elapsedSeconds / 60);
   const circleDashOffset = circleCircumference * (1 - circleProgressRatio);
 
+  const isForcedCssLandscape = forceLandscape && !isLandscape && !isCameraActive;
+
   return (
     <div
-      className={`fixed inset-0 select-none overflow-hidden flex flex-col transition-colors duration-300 ${
+      className={`fixed select-none overflow-hidden flex flex-col transition-colors duration-300 ${
+        isForcedCssLandscape ? '' : 'inset-0'
+      } ${
         cameraMode === 'circle' && ringLight
           ? 'bg-[#FFF8EB] text-white'
           : 'bg-black text-white'
       }`}
+      style={
+        isForcedCssLandscape
+          ? {
+              width: '100vh',
+              height: '100vw',
+              top: 0,
+              left: '100vw',
+              transform: 'rotate(90deg)',
+              transformOrigin: 'top left',
+            }
+          : undefined
+      }
       onClick={handleCanvasClick}
     >
       {/* Top Reading Progress Bar with Apple Glow */}
@@ -465,7 +503,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Apple HIG Eye Contact Horizon Line (30% optical reading level) */}
           <div
             className="pointer-events-none fixed left-0 right-0 z-20 flex items-center justify-between px-6 transition-opacity duration-300"
-            style={{ top: '30%' }}
+            style={isMirroredLandscape ? { bottom: '30%' } : { top: '30%' }}
           >
             <div className="flex items-center gap-1.5 opacity-30">
               <div className="w-5 h-[1.5px] bg-gradient-to-r from-transparent to-white rounded-full" />
@@ -480,7 +518,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Main Text Scroll Area */}
           <div
             ref={containerRef}
-            className="flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
+            className={`flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar ${mirrorViewportClass}`}
           >
             <div className={`w-full min-h-full transition-transform duration-200 ${mirrorContainerClass}`}>
               <div style={{ height: 'max(30vh, calc(var(--safe-area-top) + 20vh))' }} />
@@ -779,6 +817,8 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         onResumeRecording={resumeRecording}
         onStopRecording={stopRecording}
         onCancelCountdown={cancelCountdown}
+        forceLandscape={forceLandscape}
+        onToggleForceLandscape={() => setForceLandscape((prev) => !prev)}
       />
 
       {/* Camera Review & Export Modal */}

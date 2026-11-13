@@ -19,6 +19,7 @@ import {
   FileText,
   Smartphone,
   CircleDot,
+  RotateCw,
 } from 'lucide-react';
 import { ScriptSettings, AudioDevice, CameraMode } from '../types';
 import { RecordingState } from '../hooks/useCameraRecorder';
@@ -56,6 +57,8 @@ interface PrompterControlsProps {
   onCancelCountdown: () => void;
   isExpanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  forceLandscape?: boolean;
+  onToggleForceLandscape?: () => void;
 }
 
 export const PrompterControls: React.FC<PrompterControlsProps> = ({
@@ -88,6 +91,8 @@ export const PrompterControls: React.FC<PrompterControlsProps> = ({
   onCancelCountdown,
   isExpanded,
   onExpandedChange,
+  forceLandscape = false,
+  onToggleForceLandscape,
 }) => {
 
   const isCameraActive = cameraMode === 'reels' || cameraMode === 'circle';
@@ -323,6 +328,27 @@ export const PrompterControls: React.FC<PrompterControlsProps> = ({
                   className="w-full"
                 />
               </div>
+
+              {/* Manual Landscape Rotation fallback for devices with disabled/blocked auto-rotate */}
+              {!isCameraActive && onToggleForceLandscape && (
+                <div className="pt-2 border-t border-white/10">
+                  <button
+                    onPointerDown={() => haptic.light()}
+                    onClick={() => {
+                      haptic.light();
+                      onToggleForceLandscape();
+                    }}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl border apple-press-subtle transition-all ${
+                      forceLandscape
+                        ? 'bg-white/15 border-white/25 text-white font-medium'
+                        : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>Горизонтальный экран (90°)</span>
+                  </button>
+                </div>
+              )}
 
               {/* Camera-specific settings when in Reels or Circle mode */}
               {isCameraActive && (

@@ -161,9 +161,8 @@ body {
   transform-origin: center center;
 }
 
-/* Landscape: Vertical word flip (scaleY, keeps reading flow from start to end) */
-.prompter-mirrored-word-y {
-  display: inline-block;
+/* Landscape: Vertical viewport flip (scaleY on scroll container so mirror shows top-to-bottom & scrolls up) */
+.prompter-mirrored-y {
   transform: scaleY(-1);
   transform-origin: center center;
 }

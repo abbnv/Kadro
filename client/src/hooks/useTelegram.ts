@@ -59,12 +59,23 @@ export function useTelegram() {
     try {
       tg.ready();
       tg.expand();
+      const unlockOrientationSafely = () => {
+        if (typeof tg.unlockOrientation === 'function') {
+          tg.unlockOrientation();
+        }
+        try {
+          screen.orientation?.unlock?.();
+        } catch {
+          // ignore
+        }
+      };
+
       if (typeof tg.requestFullscreen === 'function') {
         tg.requestFullscreen();
       }
-      if (typeof tg.unlockOrientation === 'function') {
-        tg.unlockOrientation();
-      }
+      unlockOrientationSafely();
+      const unlockTimer1 = setTimeout(unlockOrientationSafely, 150);
+      const unlockTimer2 = setTimeout(unlockOrientationSafely, 500);
       tg.setHeaderColor('#000000');
       tg.setBackgroundColor('#000000');
       if (typeof tg.disableVerticalSwipes === 'function') {
@@ -112,9 +123,7 @@ export function useTelegram() {
 
       const handleFullscreenChanged = () => {
         updateSafeAreas();
-        if (tg.isOrientationLocked && typeof tg.unlockOrientation === 'function') {
-          tg.unlockOrientation();
-        }
+        unlockOrientationSafely();
       };
 
       if (typeof tg.onEvent === 'function') {
@@ -129,6 +138,8 @@ export function useTelegram() {
         clearTimeout(timer2);
         clearTimeout(timer3);
         clearTimeout(timer4);
+        clearTimeout(unlockTimer1);
+        clearTimeout(unlockTimer2);
         if (typeof tg.offEvent === 'function') {
           tg.offEvent('safeAreaChanged', updateSafeAreas);
           tg.offEvent('contentSafeAreaChanged', updateSafeAreas);
