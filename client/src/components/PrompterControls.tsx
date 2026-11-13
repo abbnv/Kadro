@@ -20,6 +20,7 @@ import {
   Smartphone,
   CircleDot,
   RotateCw,
+  Gamepad2,
 } from 'lucide-react';
 import { ScriptSettings, AudioDevice, CameraMode } from '../types';
 import { RecordingState } from '../hooks/useCameraRecorder';
@@ -59,6 +60,8 @@ interface PrompterControlsProps {
   onExpandedChange: (expanded: boolean) => void;
   forceLandscape?: boolean;
   onToggleForceLandscape?: () => void;
+  onOpenRemoteSettings?: () => void;
+  connectedGamepadName?: string | null;
 }
 
 export const PrompterControls: React.FC<PrompterControlsProps> = ({
@@ -93,6 +96,8 @@ export const PrompterControls: React.FC<PrompterControlsProps> = ({
   onExpandedChange,
   forceLandscape = false,
   onToggleForceLandscape,
+  onOpenRemoteSettings,
+  connectedGamepadName,
 }) => {
 
   const isCameraActive = cameraMode === 'reels' || cameraMode === 'circle';
@@ -329,26 +334,46 @@ export const PrompterControls: React.FC<PrompterControlsProps> = ({
                 />
               </div>
 
-              {/* Manual Landscape Rotation fallback for devices with disabled/blocked auto-rotate */}
-              {!isCameraActive && onToggleForceLandscape && (
-                <div className="pt-2 border-t border-white/10">
+              {/* Manual Landscape Rotation & Bluetooth Remote Settings */}
+              <div className="pt-2 border-t border-white/10 flex items-center gap-2">
+                {!isCameraActive && onToggleForceLandscape && (
                   <button
                     onPointerDown={() => haptic.light()}
                     onClick={() => {
                       haptic.light();
                       onToggleForceLandscape();
                     }}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl border apple-press-subtle transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-2xl border apple-press-subtle transition-all ${
                       forceLandscape
                         ? 'bg-white/15 border-white/25 text-white font-medium'
                         : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
                     }`}
                   >
-                    <RotateCw className="w-3.5 h-3.5" />
-                    <span>Горизонтальный экран (90°)</span>
+                    <RotateCw className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Экран 90°</span>
                   </button>
-                </div>
-              )}
+                )}
+
+                {onOpenRemoteSettings && (
+                  <button
+                    onPointerDown={() => haptic.light()}
+                    onClick={() => {
+                      haptic.light();
+                      onOpenRemoteSettings();
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-2xl border apple-press-subtle transition-all ${
+                      connectedGamepadName
+                        ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-300 font-medium'
+                        : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Gamepad2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {connectedGamepadName ? 'Пульт (вкл.)' : 'Пульт / Джойстик'}
+                    </span>
+                  </button>
+                )}
+              </div>
 
               {/* Camera-specific settings when in Reels or Circle mode */}
               {isCameraActive && (

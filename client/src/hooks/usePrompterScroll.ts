@@ -496,12 +496,27 @@ export function usePrompterScroll({
     }
   }, [containerRef]);
 
+  const nudgeScroll = useCallback(
+    (deltaPx: number) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const next = Math.max(0, Math.min(maxScroll, currentScrollTopRef.current + deltaPx));
+      currentScrollTopRef.current = next;
+      targetScrollTopRef.current = next;
+      container.scrollTop = next;
+      updateActiveWordFromScroll(next);
+    },
+    [containerRef, updateActiveWordFromScroll]
+  );
+
   return {
     tokens,
     activeWordIndex,
     scrollToWord,
     handleSpokenWords,
     resetScroll,
+    nudgeScroll,
     recomputeWordOffsets,
   };
 }

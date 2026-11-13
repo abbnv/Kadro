@@ -2,10 +2,12 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Script, ScriptSettings, AudioDevice, CameraMode } from '../types';
 import { PrompterControls } from './PrompterControls';
 import { CameraReviewModal } from './CameraReviewModal';
+import { RemoteSettingsModal } from './RemoteSettingsModal';
 import { usePrompterScroll } from '../hooks/usePrompterScroll';
 import { useSpeechRecognition, SpeechTranscriptEvent } from '../hooks/useSpeechRecognition';
 import { useCameraRecorder } from '../hooks/useCameraRecorder';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useRemoteControl } from '../hooks/useRemoteControl';
 import { haptic } from '../utils/haptics';
 import {
   AlertCircle,
@@ -97,6 +99,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isRemoteModalOpen, setIsRemoteModalOpen] = useState<boolean>(false);
   const [show5minToast, setShow5minToast] = useState<boolean>(false);
   const [autoPausedToast, setAutoPausedToast] = useState<boolean>(false);
   const [isLandscape, setIsLandscape] = useState<boolean>(() =>
@@ -174,6 +177,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     scrollToWord,
     handleSpokenWords,
     resetScroll,
+    nudgeScroll,
     recomputeWordOffsets,
   } = usePrompterScroll({
     text: script.content,
@@ -367,33 +371,23 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     onExit();
   }, [onExit]);
 
-  // Keyboard shortcuts (Space = Play/Pause, Esc = Exit)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (isCameraActive) {
-          if (recordingState === 'idle') startRecording();
-          else if (recordingState === 'recording') pauseRecording();
-          else if (recordingState === 'paused') resumeRecording();
-        } else {
-          handleTogglePlay();
-        }
-      } else if (e.code === 'Escape') {
-        handleExit();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    isCameraActive,
-    recordingState,
-    startRecording,
-    pauseRecording,
-    resumeRecording,
-    handleTogglePlay,
-    handleExit,
-  ]);
+  const handleRemotePlayPause = useCallback(() => {
+    if (isCameraActive) {
+      if (recordingState === 'idle') startRecording();
+      else if (recordingState === 'recording') pauseRecording();
+      else if (recordingState === 'paused') resumeRecording();
+    } else {
+      handleTogglePlay();
+    }
+  }, [isCameraActive, recordingState, startRecording, pauseRecording, resumeRecording, handleTogglePlay]);
+
+  const handleSpeedDelta = useCallback(
+    (delta: number) => {
+      const next = Math.max(10, Math.min(250, script.settings.speed + delta));
+      onUpdateScriptSettings({ speed: next });
+    },
+    [script.settings.speed, onUpdateScriptSettings]
+  );
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     // If settings drawer is open, first tap closes it before any other interaction
@@ -413,11 +407,31 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     setControlsVisible((prev) => !prev);
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     stopListening();
     setIsPlaying(false);
     resetScroll();
-  };
+  }, [stopListening, resetScroll]);
+
+  const {
+    bindings: remoteBindings,
+    learningAction: remoteLearningAction,
+    connectedGamepadName,
+    startLearning: startRemoteLearning,
+    cancelLearning: cancelRemoteLearning,
+    clearActionBinding: clearRemoteBinding,
+    resetBindings: resetRemoteBindings,
+  } = useRemoteControl({
+    enabled: recordingState !== 'review',
+    onPlayPause: handleRemotePlayPause,
+    onNudgeScroll: nudgeScroll,
+    onSpeedDelta: handleSpeedDelta,
+    onReset: handleReset,
+    onEscape: () => {
+      if (isRemoteModalOpen) setIsRemoteModalOpen(false);
+      else handleExit();
+    },
+  });
 
   const handleRetake = () => {
     discardRecording();
@@ -819,6 +833,21 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         onCancelCountdown={cancelCountdown}
         forceLandscape={forceLandscape}
         onToggleForceLandscape={() => setForceLandscape((prev) => !prev)}
+        onOpenRemoteSettings={() => setIsRemoteModalOpen(true)}
+        connectedGamepadName={connectedGamepadName}
+      />
+
+      {/* Bluetooth Remote / Gamepad Configurator Modal */}
+      <RemoteSettingsModal
+        isOpen={isRemoteModalOpen}
+        onClose={() => setIsRemoteModalOpen(false)}
+        bindings={remoteBindings}
+        learningAction={remoteLearningAction}
+        connectedGamepadName={connectedGamepadName}
+        onStartLearning={startRemoteLearning}
+        onCancelLearning={cancelRemoteLearning}
+        onClearBinding={clearRemoteBinding}
+        onResetBindings={resetRemoteBindings}
       />
 
       {/* Camera Review & Export Modal */}
