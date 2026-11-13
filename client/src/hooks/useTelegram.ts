@@ -33,6 +33,9 @@ declare global {
         requestFullscreen?: () => void;
         exitFullscreen?: () => void;
         isFullscreen?: boolean;
+        lockOrientation?: () => void;
+        unlockOrientation?: () => void;
+        isOrientationLocked?: boolean;
         safeAreaInset?: { top: number; bottom: number; left: number; right: number };
         contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
         HapticFeedback?: {
@@ -58,6 +61,9 @@ export function useTelegram() {
       tg.expand();
       if (typeof tg.requestFullscreen === 'function') {
         tg.requestFullscreen();
+      }
+      if (typeof tg.unlockOrientation === 'function') {
+        tg.unlockOrientation();
       }
       tg.setHeaderColor('#000000');
       tg.setBackgroundColor('#000000');
@@ -104,10 +110,17 @@ export function useTelegram() {
       const timer3 = setTimeout(updateSafeAreas, 600);
       const timer4 = setTimeout(updateSafeAreas, 1200);
 
+      const handleFullscreenChanged = () => {
+        updateSafeAreas();
+        if (tg.isOrientationLocked && typeof tg.unlockOrientation === 'function') {
+          tg.unlockOrientation();
+        }
+      };
+
       if (typeof tg.onEvent === 'function') {
         tg.onEvent('safeAreaChanged', updateSafeAreas);
         tg.onEvent('contentSafeAreaChanged', updateSafeAreas);
-        tg.onEvent('fullscreenChanged', updateSafeAreas);
+        tg.onEvent('fullscreenChanged', handleFullscreenChanged);
         tg.onEvent('viewportChanged', updateSafeAreas);
       }
 
@@ -119,7 +132,7 @@ export function useTelegram() {
         if (typeof tg.offEvent === 'function') {
           tg.offEvent('safeAreaChanged', updateSafeAreas);
           tg.offEvent('contentSafeAreaChanged', updateSafeAreas);
-          tg.offEvent('fullscreenChanged', updateSafeAreas);
+          tg.offEvent('fullscreenChanged', handleFullscreenChanged);
           tg.offEvent('viewportChanged', updateSafeAreas);
         }
       };

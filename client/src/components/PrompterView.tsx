@@ -111,14 +111,24 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
 
   // Monitor device orientation: portrait vs landscape
   useEffect(() => {
+    let orientationTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
       setIsLandscape(window.innerWidth > window.innerHeight);
     };
+    const handleOrientationChange = () => {
+      handleResize();
+      // Android WebView often updates innerWidth/innerHeight slightly after orientationchange fires
+      if (orientationTimer) clearTimeout(orientationTimer);
+      orientationTimer = setTimeout(handleResize, 150);
+    };
     window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.Telegram?.WebApp?.onEvent?.('viewportChanged', handleResize);
     return () => {
+      if (orientationTimer) clearTimeout(orientationTimer);
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      window.Telegram?.WebApp?.offEvent?.('viewportChanged', handleResize);
     };
   }, []);
 
@@ -309,14 +319,19 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     };
   }, [stopListening]);
 
-  // Request fullscreen by default on enter
+  // Request fullscreen & unlock orientation by default on enter
   useEffect(() => {
-    if (window.Telegram?.WebApp && typeof window.Telegram.WebApp.requestFullscreen === 'function') {
-      try {
-        window.Telegram.WebApp.requestFullscreen();
-      } catch {
-        // ignore
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try {
+      if (typeof tg.requestFullscreen === 'function') {
+        tg.requestFullscreen();
       }
+      if (typeof tg.unlockOrientation === 'function') {
+        tg.unlockOrientation();
+      }
+    } catch {
+      // ignore
     }
   }, []);
 
@@ -366,7 +381,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     if ((e.target as HTMLElement).closest('[data-word-index]')) {
       return;
     }
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+    if (!window.Telegram?.WebApp?.initData && !document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
     haptic.light();
