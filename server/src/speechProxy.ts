@@ -183,8 +183,10 @@ export function setupSpeechProxy(wss: WebSocketServer) {
       dgConnection.on(LiveTranscriptionEvents.Close, (event: any) => {
         console.log('[SpeechProxy] 🔴 Deepgram соединение закрыто', event || '');
         isConnectedToDg = false;
+        flushUsage();
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'closed' }));
+          ws.close(1000, 'Deepgram connection closed');
         }
       });
     } catch (err: any) {
@@ -203,14 +205,14 @@ export function setupSpeechProxy(wss: WebSocketServer) {
       if (isTerminating) return;
 
       if (isBinary) {
+        if (!dgConnection || !isConnectedToDg) return;
+
         const chunkLen = message.length;
         totalAudioBytes += chunkLen;
         pendingAudioBytes += chunkLen;
 
         // Stream binary chunk to Deepgram
-        if (dgConnection && isConnectedToDg) {
-          dgConnection.send(message);
-        }
+        dgConnection.send(message);
 
         // Flush periodically when buffer accumulates
         if (pendingAudioBytes >= FLUSH_THRESHOLD_BYTES) {

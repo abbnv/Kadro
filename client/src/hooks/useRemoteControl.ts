@@ -196,6 +196,8 @@ export function useRemoteControl({
     };
   }, []);
 
+  const [heldKeysCount, setHeldKeysCount] = useState<number>(0);
+
   // Keyboard listener (handles both normal remote control and key learning)
   useEffect(() => {
     if (!enabled) return;
@@ -262,17 +264,25 @@ export function useRemoteControl({
       // Continuous scroll keys
       if (map.scrollUp.key?.code === code || map.scrollDown.key?.code === code) {
         e.preventDefault();
-        heldKeysRef.current.add(code);
+        if (!heldKeysRef.current.has(code)) {
+          heldKeysRef.current.add(code);
+          setHeldKeysCount(heldKeysRef.current.size);
+        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code || e.key;
-      if (code) heldKeysRef.current.delete(code);
+      if (code && heldKeysRef.current.delete(code)) {
+        setHeldKeysCount(heldKeysRef.current.size);
+      }
     };
 
     const handleBlur = () => {
-      heldKeysRef.current.clear();
+      if (heldKeysRef.current.size > 0) {
+        heldKeysRef.current.clear();
+        setHeldKeysCount(0);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -283,12 +293,18 @@ export function useRemoteControl({
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
       heldKeysRef.current.clear();
+      setHeldKeysCount(0);
     };
   }, [enabled, saveBindings]);
 
   // Animation loop for continuous held keys + Gamepad polling (stick & buttons)
+  // Only runs when a gamepad is connected, a scroll key is held, or learning mode is active
+  const needsPollingLoop = Boolean(
+    enabled && (connectedGamepadName !== null || heldKeysCount > 0 || learningAction !== null)
+  );
+
   useEffect(() => {
-    if (!enabled) return;
+    if (!needsPollingLoop) return;
 
     let rafId = 0;
     let lastTime = performance.now();
@@ -419,7 +435,7 @@ export function useRemoteControl({
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [enabled, saveBindings]);
+  }, [needsPollingLoop, saveBindings]);
 
   return {
     bindings,

@@ -13,6 +13,8 @@ export interface ScriptSettings {
   countdownSeconds?: 0 | 3;
   cameraOverlayOpacity?: number;
   mirrorOutputVideo?: boolean;
+  lastWordIndex?: number;
+  readingProgress?: number;
 }
 
 export interface Script {

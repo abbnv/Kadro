@@ -39,6 +39,8 @@ export interface ScriptSettings {
   countdownSeconds?: 0 | 3; // Pre-recording countdown
   cameraOverlayOpacity?: number; // Text capsule background opacity in camera mode (10 - 85)
   mirrorOutputVideo?: boolean; // Mirror final recorded video file
+  lastWordIndex?: number; // Saved word index where the user left off
+  readingProgress?: number; // Saved reading progress percentage (0 - 100)
 }
 
 export interface Script {

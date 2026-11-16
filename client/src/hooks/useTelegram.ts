@@ -82,6 +82,12 @@ export function useTelegram() {
         tg.disableVerticalSwipes();
       }
 
+      const setCssVarIfChanged = (name: string, value: string) => {
+        if (document.documentElement.style.getPropertyValue(name) !== value) {
+          document.documentElement.style.setProperty(name, value);
+        }
+      };
+
       const updateSafeAreas = () => {
         const topSafe = tg.safeAreaInset?.top || 0;
         const bottomSafe = tg.safeAreaInset?.bottom || 0;
@@ -89,25 +95,25 @@ export function useTelegram() {
         const contentBottom = tg.contentSafeAreaInset?.bottom || 0;
 
         if (topSafe > 0) {
-          document.documentElement.style.setProperty('--tg-safe-area-inset-top', `${topSafe}px`);
+          setCssVarIfChanged('--tg-safe-area-inset-top', `${topSafe}px`);
         }
         if (contentTop > 0) {
-          document.documentElement.style.setProperty('--tg-content-safe-area-inset-top', `${contentTop}px`);
+          setCssVarIfChanged('--tg-content-safe-area-inset-top', `${contentTop}px`);
         }
         if (bottomSafe > 0) {
-          document.documentElement.style.setProperty('--tg-safe-area-inset-bottom', `${bottomSafe}px`);
+          setCssVarIfChanged('--tg-safe-area-inset-bottom', `${bottomSafe}px`);
         }
         if (contentBottom > 0) {
-          document.documentElement.style.setProperty('--tg-content-safe-area-inset-bottom', `${contentBottom}px`);
+          setCssVarIfChanged('--tg-content-safe-area-inset-bottom', `${contentBottom}px`);
         }
 
         const totalTop = topSafe + contentTop;
         if (totalTop > 0) {
-          document.documentElement.style.setProperty('--safe-area-top', `${totalTop}px`);
+          setCssVarIfChanged('--safe-area-top', `${totalTop}px`);
         }
         const totalBottom = bottomSafe + contentBottom;
         if (totalBottom > 0) {
-          document.documentElement.style.setProperty('--safe-area-bottom', `${totalBottom}px`);
+          setCssVarIfChanged('--safe-area-bottom', `${totalBottom}px`);
         }
       };
 

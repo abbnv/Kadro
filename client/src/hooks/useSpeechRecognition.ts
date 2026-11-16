@@ -323,6 +323,8 @@ export function useSpeechRecognition({
                 isFinal: data.isFinal,
               });
             }
+          } else if (data.type === 'closed') {
+            stop();
           } else if (data.type === 'error') {
             console.error('WebSocket Deepgram error:', data.message);
             setStatusMessage(`Ошибка: ${data.message}`);

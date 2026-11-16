@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { Script, ScriptSettings, AudioDevice, CameraMode } from '../types';
+import { Script, ScriptSettings, AudioDevice, CameraMode, WordToken } from '../types';
 import { PrompterControls } from './PrompterControls';
 import { CameraReviewModal } from './CameraReviewModal';
 import { RemoteSettingsModal } from './RemoteSettingsModal';
@@ -9,11 +9,13 @@ import { useCameraRecorder } from '../hooks/useCameraRecorder';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useRemoteControl } from '../hooks/useRemoteControl';
 import { haptic } from '../utils/haptics';
+import { getSavedReadingProgress } from '../utils/readingProgress';
 import {
   AlertCircle,
   CheckCircle2,
   VideoOff,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 
 interface PrompterViewProps {
@@ -44,18 +46,19 @@ const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
   totalTokens,
 }) => {
   const barRef = useRef<HTMLDivElement>(null);
+  const lastRatioRef = useRef<number>(-1);
 
   // In speech mode: update progress when activeWordIndex advances
   useEffect(() => {
     if (mode === 'speech') {
-      const pct = totalTokens > 1 ? Math.min(100, Math.round((activeWordIndex / (totalTokens - 1)) * 100)) : 0;
+      const ratio = totalTokens > 1 ? Math.min(1, Math.max(0, activeWordIndex / (totalTokens - 1))) : 0;
       if (barRef.current) {
-        barRef.current.style.width = `${pct}%`;
+        barRef.current.style.transform = `scaleX(${ratio})`;
       }
     }
   }, [mode, activeWordIndex, totalTokens]);
 
-  // In speed mode: listen to scroll on container directly without re-rendering PrompterView
+  // In speed mode: listen to scroll on container directly using GPU-composited scaleX (zero layout reflows)
   useEffect(() => {
     const container = containerRef.current;
     if (!container || mode !== 'speed') return;
@@ -63,8 +66,11 @@ const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
     const handleScroll = () => {
       const maxScroll = container.scrollHeight - container.clientHeight;
       if (maxScroll > 0 && barRef.current) {
-        const pct = Math.min(100, Math.max(0, (container.scrollTop / maxScroll) * 100));
-        barRef.current.style.width = `${pct}%`;
+        const ratio = Math.min(1, Math.max(0, container.scrollTop / maxScroll));
+        if (Math.abs(ratio - lastRatioRef.current) >= 0.001) {
+          lastRatioRef.current = ratio;
+          barRef.current.style.transform = `scaleX(${ratio})`;
+        }
       }
     };
 
@@ -77,12 +83,69 @@ const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
     <div className="fixed top-0 left-0 right-0 h-[2.5px] bg-white/10 z-50 overflow-hidden pointer-events-none">
       <div
         ref={barRef}
-        className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] transition-all duration-150 ease-out"
-        style={{ width: '0%' }}
+        className={`h-full w-full origin-left bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] ${
+          mode === 'speech' ? 'transition-transform duration-150 ease-out' : ''
+        }`}
+        style={{ transform: 'scaleX(0)' }}
       />
     </div>
   );
 };
+
+// Memoized token list with event delegation: prevents 3,000+ DOM nodes and 6,000+ closures
+// from re-rendering or allocating GPU drop-shadow surfaces during scrolling / remote usage
+interface ScriptTokensListProps {
+  tokens: WordToken[];
+  spokenUpToIndex: number;
+  onWordSelect: (wordIndex: number) => void;
+}
+
+const ScriptTokensList = React.memo<ScriptTokensListProps>(
+  ({ tokens, spokenUpToIndex, onWordSelect }) => {
+    const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+      const wordEl = (e.target as HTMLElement).closest('[data-word-index]');
+      if (wordEl) {
+        haptic.selection();
+      }
+    }, []);
+
+    const handleClick = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        const wordEl = (e.target as HTMLElement).closest<HTMLElement>('[data-word-index]');
+        if (!wordEl) return;
+        e.stopPropagation();
+        const idx = Number(wordEl.dataset.wordIndex);
+        if (!Number.isNaN(idx)) {
+          onWordSelect(idx);
+        }
+      },
+      [onWordSelect]
+    );
+
+    return (
+      <div onPointerDown={handlePointerDown} onClick={handleClick}>
+        {tokens.map((token) => {
+          const isSpoken = token.index < spokenUpToIndex;
+
+          return (
+            <React.Fragment key={token.index}>
+              <span
+                data-word-index={token.index}
+                className={`inline mr-[0.25em] cursor-pointer ${
+                  isSpoken ? 'text-neutral-400/45' : 'text-white'
+                }`}
+              >
+                {token.raw}
+              </span>
+              {token.hasDoubleNewline && <div className="h-5 w-full" />}
+              {token.hasNewline && !token.hasDoubleNewline && <br />}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  }
+);
 
 export const PrompterView: React.FC<PrompterViewProps> = ({
   script,
@@ -102,11 +165,15 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const [isRemoteModalOpen, setIsRemoteModalOpen] = useState<boolean>(false);
   const [show5minToast, setShow5minToast] = useState<boolean>(false);
   const [autoPausedToast, setAutoPausedToast] = useState<boolean>(false);
+  const [restoredProgressPct, setRestoredProgressPct] = useState<number | null>(null);
   const [isLandscape, setIsLandscape] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false
   );
   const [forceLandscape, setForceLandscape] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const restoredToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const initialSavedProgress = useMemo(() => getSavedReadingProgress(script), [script.id]);
 
   useWakeLock(true);
 
@@ -171,6 +238,30 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     setTimeout(() => setAutoPausedToast(false), 4500);
   }, []);
 
+  const handleProgressSave = useCallback(
+    (wordIndex: number, progressPct: number) => {
+      onUpdateScriptSettings({
+        lastWordIndex: wordIndex,
+        readingProgress: progressPct,
+      });
+    },
+    [onUpdateScriptSettings]
+  );
+
+  const handleRestoredProgress = useCallback((pct: number) => {
+    setRestoredProgressPct(pct);
+    if (restoredToastTimerRef.current) clearTimeout(restoredToastTimerRef.current);
+    restoredToastTimerRef.current = setTimeout(() => {
+      setRestoredProgressPct(null);
+    }, 4500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (restoredToastTimerRef.current) clearTimeout(restoredToastTimerRef.current);
+    };
+  }, []);
+
   const {
     tokens,
     activeWordIndex,
@@ -180,6 +271,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     nudgeScroll,
     recomputeWordOffsets,
   } = usePrompterScroll({
+    scriptId: script.id,
     text: script.content,
     speed: script.settings.speed,
     mode: script.settings.mode,
@@ -187,7 +279,10 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     containerRef,
     fontSize: script.settings.fontSize,
     paddingX: script.settings.paddingX,
+    initialWordIndex: initialSavedProgress.wordIndex,
     onReachEnd: handleReachEnd,
+    onProgressSave: handleProgressSave,
+    onRestoredProgress: handleRestoredProgress,
   });
 
   // Recompute word offsets whenever cameraMode changes container layout
@@ -300,6 +395,13 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   startSpeechRef.current = startListening;
   stopListeningRef.current = stopListening;
 
+  // Ensure speech recognition & microphone stream are stopped if user switches to speed mode
+  useEffect(() => {
+    if (script.settings.mode === 'speed') {
+      stopListening();
+    }
+  }, [script.settings.mode, stopListening]);
+
   // Toggle Play / Pause (in text mode or rehearsal)
   const handleTogglePlay = useCallback(() => {
     if (script.settings.mode === 'speech') {
@@ -340,6 +442,9 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
       try {
         if (tg && typeof tg.unlockOrientation === 'function') {
           tg.unlockOrientation();
+        }
+        if (tg && typeof tg.disableVerticalSwipes === 'function') {
+          tg.disableVerticalSwipes();
         }
         screen.orientation?.unlock?.();
       } catch {
@@ -410,6 +515,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
   const handleReset = useCallback(() => {
     stopListening();
     setIsPlaying(false);
+    setRestoredProgressPct(null);
     resetScroll();
   }, [stopListening, resetScroll]);
 
@@ -438,36 +544,22 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
     handleReset();
   };
 
-  // Render token spans helper (shared across Text, Reels, and Circle layouts)
-  const renderScriptTokens = () =>
-    tokens.map((token) => {
-      const isSpoken = script.settings.mode === 'speech' && token.index < activeWordIndex;
+  const isSettingsOpenRef = useRef<boolean>(isSettingsOpen);
+  isSettingsOpenRef.current = isSettingsOpen;
 
-      return (
-        <React.Fragment key={token.index}>
-          <span
-            data-word-index={token.index}
-            onPointerDown={() => haptic.selection()}
-            className={`inline-block mr-[0.25em] align-middle cursor-pointer transition-colors duration-150 ${
-              isSpoken ? 'text-neutral-400/45' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]'
-            }`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (isSettingsOpen) {
-                haptic.light();
-                setIsSettingsOpen(false);
-                return;
-              }
-              scrollToWord(token.index);
-            }}
-          >
-            {token.raw}
-          </span>
-          {token.hasDoubleNewline && <div className="h-5 w-full" />}
-          {token.hasNewline && !token.hasDoubleNewline && <br />}
-        </React.Fragment>
-      );
-    });
+  const handleWordSelect = useCallback(
+    (wordIndex: number) => {
+      if (isSettingsOpenRef.current) {
+        haptic.light();
+        setIsSettingsOpen(false);
+        return;
+      }
+      scrollToWord(wordIndex, true);
+    },
+    [scrollToWord]
+  );
+
+  const spokenUpToIndex = script.settings.mode === 'speech' ? activeWordIndex : 0;
 
   // Circle 60s progress math
   const circleRadius = 146;
@@ -529,29 +621,35 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             </div>
           </div>
 
-          {/* Main Text Scroll Area */}
-          <div
-            ref={containerRef}
-            className={`relative flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar ${mirrorViewportClass}`}
-          >
-            <div className={`w-full min-h-full transition-transform duration-200 ${mirrorContainerClass}`}>
-              <div style={{ height: 'max(20vh, calc(var(--safe-area-top) + 12vh))' }} />
+          {/* Main Text Scroll Area: outer wrapper holds vertical mirror flip so native UIScrollView stays untransformed */}
+          <div className={`relative flex-1 w-full overflow-hidden flex flex-col ${mirrorViewportClass}`}>
+            <div
+              ref={containerRef}
+              className="relative flex-1 w-full overflow-y-scroll overflow-x-hidden hide-scrollbar"
+            >
+              <div className={`w-full min-h-full ${mirrorContainerClass}`}>
+                <div style={{ height: 'max(20vh, calc(var(--safe-area-top) + 12vh))' }} />
 
-              <div
-                className="w-full mx-auto py-4 font-normal tracking-wide box-border"
-                style={{
-                  paddingLeft: `${Math.max(2, Math.min(32, script.settings.paddingX))}%`,
-                  paddingRight: `${Math.max(2, Math.min(32, script.settings.paddingX))}%`,
-                  fontSize: `${script.settings.fontSize}px`,
-                  lineHeight: 1.45,
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                }}
-              >
-                {renderScriptTokens()}
+                <div
+                  className="w-full mx-auto py-4 font-normal tracking-wide box-border"
+                  style={{
+                    paddingLeft: `${Math.max(2, Math.min(32, script.settings.paddingX))}%`,
+                    paddingRight: `${Math.max(2, Math.min(32, script.settings.paddingX))}%`,
+                    fontSize: `${script.settings.fontSize}px`,
+                    lineHeight: 1.45,
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                >
+                  <ScriptTokensList
+                    tokens={tokens}
+                    spokenUpToIndex={spokenUpToIndex}
+                    onWordSelect={handleWordSelect}
+                  />
+                </div>
+
+                <div style={{ height: '70vh' }} />
               </div>
-
-              <div style={{ height: '70vh' }} />
             </div>
           </div>
 
@@ -614,9 +712,14 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                   lineHeight: 1.38,
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
+                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
                 }}
               >
-                {renderScriptTokens()}
+                <ScriptTokensList
+                  tokens={tokens}
+                  spokenUpToIndex={spokenUpToIndex}
+                  onWordSelect={handleWordSelect}
+                />
               </div>
               <div style={{ height: '30vh' }} />
             </div>
@@ -668,9 +771,14 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                   lineHeight: 1.35,
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
+                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
                 }}
               >
-                {renderScriptTokens()}
+                <ScriptTokensList
+                  tokens={tokens}
+                  spokenUpToIndex={spokenUpToIndex}
+                  onWordSelect={handleWordSelect}
+                />
               </div>
               <div style={{ height: '21vh' }} />
             </div>
@@ -778,6 +886,26 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           <span className="mt-3 text-xs font-medium text-white/80 bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
             Нажмите на экран для отмены
           </span>
+        </div>
+      )}
+
+      {/* Restored Reading Progress Toast */}
+      {restoredProgressPct !== null && !autoPausedToast && (
+        <div
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-sheet-up"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2.5 pl-4 pr-2 py-1.5 rounded-full bg-neutral-900/95 backdrop-blur-xl border border-white/20 text-white font-medium text-xs shadow-[0_12px_32px_rgba(0,0,0,0.7)]">
+            <span>Продолжаем с {restoredProgressPct}%</span>
+            <button
+              onPointerDown={() => haptic.light()}
+              onClick={handleReset}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold apple-press-subtle transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>С начала</span>
+            </button>
+          </div>
         </div>
       )}
 

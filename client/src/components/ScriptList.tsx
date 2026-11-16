@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Home, Plus, Play, Edit3, Trash2, Clock, FileText } from 'lucide-react';
 import { Script } from '../types';
 import { haptic } from '../utils/haptics';
+import { getSavedReadingProgress, clearLocalReadingProgress } from '../utils/readingProgress';
 
 interface ScriptListProps {
   scripts: Script[];
@@ -82,13 +83,14 @@ export const ScriptList: React.FC<ScriptListProps> = ({
             const readingTime = getReadingTime(script.content);
             const wordsCount = script.content.trim().split(/\s+/).filter(Boolean).length;
             const previewText = script.content.trim().slice(0, 110) || 'Пустой сценарий...';
+            const savedProgress = getSavedReadingProgress(script);
 
             return (
               <div
                 key={script.id}
                 onPointerDown={() => haptic.light()}
                 onClick={() => onSelectScript(script)}
-                className="group relative rounded-[24px] bg-neutral-900/50 backdrop-blur-xl border border-white/10 hover:border-white/20 p-4 transition-colors duration-200 cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)] active:bg-neutral-900/80"
+                className="group relative rounded-[24px] bg-neutral-900/50 backdrop-blur-xl border border-white/10 hover:border-white/20 p-4 transition-colors duration-200 cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)] active:bg-neutral-900/80 overflow-hidden"
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <h3 className="font-semibold text-sm text-white tracking-tight truncate flex-1 group-hover:text-neutral-200 transition-colors">
@@ -147,14 +149,31 @@ export const ScriptList: React.FC<ScriptListProps> = ({
                   {previewText}
                 </p>
 
-                <div className="flex items-center gap-3 text-[11px] text-neutral-400 font-medium">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-neutral-400" />
-                    ~{readingTime}
-                  </span>
-                  <span>•</span>
-                  <span>{wordsCount} слов</span>
+                <div className="flex items-center justify-between gap-3 text-[11px] text-neutral-400 font-medium">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-neutral-400" />
+                      ~{readingTime}
+                    </span>
+                    <span>•</span>
+                    <span>{wordsCount} слов</span>
+                  </div>
+
+                  {savedProgress.progressPct > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white text-[10px] font-semibold">
+                      Прочитано {savedProgress.progressPct}%
+                    </span>
+                  )}
                 </div>
+
+                {savedProgress.progressPct > 0 && (
+                  <div className="mt-2.5 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-white/80"
+                      style={{ width: `${savedProgress.progressPct}%` }}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -202,6 +221,7 @@ export const ScriptList: React.FC<ScriptListProps> = ({
               <button
                 onPointerDown={() => haptic.heavy()}
                 onClick={() => {
+                  clearLocalReadingProgress(scriptToDelete.id);
                   onDeleteScript(scriptToDelete.id);
                   setScriptToDelete(null);
                 }}
