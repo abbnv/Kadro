@@ -131,14 +131,19 @@ const ScriptTokensList = React.memo<ScriptTokensListProps>(
             <React.Fragment key={token.index}>
               <span
                 data-word-index={token.index}
-                className={`inline mr-[0.25em] cursor-pointer ${
+                className={`whitespace-nowrap cursor-pointer ${
                   isSpoken ? 'text-neutral-400/45' : 'text-white'
                 }`}
               >
                 {token.raw}
               </span>
-              {token.hasDoubleNewline && <div className="h-5 w-full" />}
-              {token.hasNewline && !token.hasDoubleNewline && <br />}
+              {token.hasDoubleNewline ? (
+                <div className="h-5 w-full" />
+              ) : token.hasNewline ? (
+                <br />
+              ) : (
+                ' '
+              )}
             </React.Fragment>
           );
         })}
@@ -637,8 +642,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                     paddingRight: `${Math.max(2, Math.min(32, script.settings.paddingX))}%`,
                     fontSize: `${script.settings.fontSize}px`,
                     lineHeight: 1.45,
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word',
                   }}
                 >
                   <ScriptTokensList
@@ -710,8 +713,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                   paddingRight: `${Math.max(5, Math.min(28, script.settings.paddingX))}%`,
                   fontSize: `${Math.min(44, Math.max(20, script.settings.fontSize))}px`,
                   lineHeight: 1.38,
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
                   textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
                 }}
               >
@@ -769,8 +770,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                   paddingRight: `${Math.max(5, Math.min(25, script.settings.paddingX))}%`,
                   fontSize: `${Math.min(38, Math.max(20, script.settings.fontSize))}px`,
                   lineHeight: 1.35,
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
                   textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
                 }}
               >
